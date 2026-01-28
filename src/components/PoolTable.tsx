@@ -8,6 +8,7 @@ import {
 import type { Ball } from '../utils/types';
 import { getBallColor, isStripe, getRackBalls } from '../utils/ball-utils';
 import { resolveWallCollision, resolveBallCollision } from '../utils/physics-utils';
+import { calculateAIShot } from '../utils/ai-utils';
 
 const RACK_APEX_X = 600;
 const RACK_APEX_Y = 200;
@@ -25,6 +26,42 @@ const PoolTable: React.FC = () => {
     const isDraggingRef = useRef<boolean>(false);
     const mousePosRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
 
+    // Turn Management
+    const [turn, setTurn] = React.useState<'player' | 'ai'>('player');
+    const [gamePhase, setGamePhase] = React.useState<'aiming' | 'moving' | 'turn-end'>('aiming');
+    const [message, setMessage] = React.useState<string>('Player\'s Turn');
+    const [playerGroup, setPlayerGroup] = React.useState<'solids' | 'stripes' | null>(null);
+
+    // Track if a ball was potted this turn to decide if turn continues
+    const pottedBallsThisTurnRef = useRef<number[]>([]);
+    // Track if scratch occurred
+    const scratchRef = useRef<boolean>(false);
+
+    useEffect(() => {
+        if (gamePhase === 'aiming' && turn === 'ai') {
+            const timer = setTimeout(() => {
+                const aiGroup = playerGroup ? (playerGroup === 'solids' ? 'stripes' : 'solids') : null;
+                const shot = calculateAIShot(ballsRef.current, aiGroup);
+                if (shot) {
+                    const cueBall = ballsRef.current.find(b => b.number === 0);
+                    if (cueBall) {
+                        cueBall.vx = shot.vx;
+                        cueBall.vy = shot.vy;
+                        setGamePhase('moving');
+                        pottedBallsThisTurnRef.current = [];
+                        scratchRef.current = false;
+                    }
+                } else {
+                    // key part: if AI is stuck or no balls, switch back? 
+                    // Technically game over if no balls, but let's just pass turn if it fails
+                    setTurn('player');
+                    setMessage("Player's Turn");
+                }
+            }, 1000 + Math.random() * 1000); // 1-2s delay
+            return () => clearTimeout(timer);
+        }
+    }, [turn, gamePhase, playerGroup]);
+
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -36,10 +73,16 @@ const PoolTable: React.FC = () => {
         const updatePhysics = () => {
             const balls = ballsRef.current;
             const ballsToRemove: number[] = [];
+            let moving = false;
 
             // 1. Movement, Friction, Rails, Pockets
             for (let i = 0; i < balls.length; i++) {
                 const ball = balls[i];
+
+                // Check if moving
+                if (Math.abs(ball.vx) > 0 || Math.abs(ball.vy) > 0) {
+                    moving = true;
+                }
 
                 // Apply velocity
                 ball.x += ball.vx;
@@ -71,36 +114,43 @@ const PoolTable: React.FC = () => {
                             ball.y = 200;
                             ball.vx = 0;
                             ball.vy = 0;
+                            scratchRef.current = true;
                         } else {
                             // Pot object ball
                             ballsToRemove.push(i);
+                            pottedBallsThisTurnRef.current.push(ball.number);
                         }
                         break; // Ball handled, move to next ball
                     }
                 }
             }
 
-            // Remove potted balls (in reverse order to keep indices valid during loop, or filter)
+            // Remove potted balls
             if (ballsToRemove.length > 0) {
-                // Filter out balls that are in the removal list
-                // We need to keep the ORIGINAL array reference or update the ref? 
-                // Updating the ref is safer for react 'ref' pattern, though we are mutating objects inside.
-                // We should replace the array.
                 ballsRef.current = balls.filter((_, index) => !ballsToRemove.includes(index));
             }
 
             // 2. Ball-Ball Collisions
-            // We re-read ballsRef.current in case balls were removed
             const activeBalls = ballsRef.current;
             for (let i = 0; i < activeBalls.length; i++) {
                 for (let j = i + 1; j < activeBalls.length; j++) {
                     resolveBallCollision(activeBalls[i], activeBalls[j]);
                 }
             }
+
+            // Game Logic: Check for movement stop
+            if (gamePhase === 'moving' && !moving) {
+                // All balls stopped
+                // Decide next turn
+                setGamePhase('turn-end');
+            }
         };
 
+
         const render = () => {
-            updatePhysics();
+            if (gamePhase === 'moving') {
+                updatePhysics();
+            }
 
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -172,8 +222,8 @@ const PoolTable: React.FC = () => {
                 ctx.stroke();
             });
 
-            // 5. Draw Aim Line (if dragging)
-            if (isDraggingRef.current) {
+            // 5. Draw Aim Line (if dragging and Player turn)
+            if (isDraggingRef.current && turn === 'player' && gamePhase === 'aiming') {
                 const cueBall = ballsRef.current.find(b => b.number === 0);
                 if (cueBall) {
                     const cx = cueBall.x + RAIL_WIDTH;
@@ -280,9 +330,106 @@ const PoolTable: React.FC = () => {
         return () => {
             cancelAnimationFrame(animationFrameId);
         };
-    }, []);
+    }, [gamePhase, turn, playerGroup]);
+
+    // Effect to handle turn transitions
+    useEffect(() => {
+        if (gamePhase === 'turn-end') {
+            const isScratch = scratchRef.current;
+            const pottedBalls = pottedBallsThisTurnRef.current;
+            const hasPotted = pottedBalls.length > 0;
+
+            let nextTurn = turn;
+            let nextMessage = "";
+            let nextPlayerGroup = playerGroup;
+
+            // Helper to check ball type
+            const hasStripe = pottedBalls.some(n => isStripe(n) && n !== 8);
+            const hasSolid = pottedBalls.some(n => !isStripe(n) && n !== 8 && n !== 0);
+            const has8Ball = pottedBalls.includes(8);
+
+            // Turn Logic
+            if (isScratch) {
+                nextTurn = turn === 'player' ? 'ai' : 'player';
+                nextMessage = nextTurn === 'player' ? "Player's Turn (Scratch!)" : "AI's Turn (Player Scratched!)";
+
+                if (has8Ball) {
+                    nextMessage = turn === 'player' ? "GAME OVER - You Lost (8-Ball Scratch)" : "GAME OVER - You Won (AI Scratch on 8)";
+                }
+            } else if (has8Ball) {
+                const balls = ballsRef.current;
+
+                if (!playerGroup) {
+                    nextMessage = turn === 'player' ? "GAME OVER - You Lost (Early 8-Ball)" : "GAME OVER - You Won (AI Early 8)";
+                } else {
+                    const currentGroup = turn === 'player' ? playerGroup : (playerGroup === 'solids' ? 'stripes' : 'solids');
+                    const hasRemainingGroupBalls = balls.some(b => {
+                        if (b.number === 0 || b.number === 8) return false;
+                        const isS = isStripe(b.number);
+                        return currentGroup === 'stripes' ? isS : !isS;
+                    });
+
+                    if (hasRemainingGroupBalls) {
+                        nextMessage = turn === 'player' ? "GAME OVER - You Lost (Early 8-Ball)" : "GAME OVER - You Won (AI Early 8)";
+                    } else {
+                        nextMessage = turn === 'player' ? "GAME OVER - You Won!" : "GAME OVER - AI Won!";
+                    }
+                }
+            } else if (hasPotted) {
+                // Handle Group Assignment
+                if (!playerGroup && !has8Ball) {
+                    const firstBall = pottedBalls[0];
+                    if (firstBall !== 8) {
+                        const isFirstStripe = isStripe(firstBall);
+                        if (turn === 'player') {
+                            nextPlayerGroup = isFirstStripe ? 'stripes' : 'solids';
+                            nextMessage = `You are ${nextPlayerGroup.toUpperCase()}!`;
+                        } else {
+                            nextPlayerGroup = isFirstStripe ? 'solids' : 'stripes';
+                            nextMessage = `AI is ${isFirstStripe ? 'STRIPES' : 'SOLIDS'}. You are ${nextPlayerGroup.toUpperCase()}.`;
+                        }
+                    }
+                }
+
+                // Determine if turn continues
+                const currentGroup = turn === 'player' ? nextPlayerGroup : (nextPlayerGroup ? (nextPlayerGroup === 'solids' ? 'stripes' : 'solids') : null);
+
+                if (!currentGroup) {
+                    nextMessage = turn === 'player' ? "Player's Turn (Table Open)" : "AI's Turn (Table Open)";
+                } else {
+                    const pottedOwnGroup = pottedBalls.some(n => {
+                        if (n === 8) return false;
+                        return currentGroup === 'stripes' ? isStripe(n) : !isStripe(n);
+                    });
+                    const pottedOpponentGroup = pottedBalls.some(n => {
+                        if (n === 8) return false;
+                        return currentGroup === 'stripes' ? !isStripe(n) : isStripe(n);
+                    });
+
+                    if (pottedOwnGroup && !pottedOpponentGroup) {
+                        nextMessage = turn === 'player' ? "Player's Turn (Nice Shot!)" : "AI's Turn (Nice Shot!)";
+                    } else if (pottedOwnGroup && pottedOpponentGroup) {
+                        nextMessage = turn === 'player' ? "Player's Turn (Messy Shot!)" : "AI's Turn (Messy Shot!)";
+                    } else {
+                        nextTurn = turn === 'player' ? 'ai' : 'player';
+                        nextMessage = turn === 'player' ? "AI's Turn (Wrong Ball!)" : "Player's Turn (AI Wrong Ball!)";
+                    }
+                }
+            } else {
+                nextTurn = turn === 'player' ? 'ai' : 'player';
+                nextMessage = nextTurn === 'player' ? "Player's Turn" : "AI's Turn";
+            }
+
+            setPlayerGroup(nextPlayerGroup);
+            setTurn(nextTurn);
+            setMessage(nextMessage);
+            setGamePhase('aiming');
+        }
+    }, [gamePhase, turn, playerGroup]);
 
     const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (turn !== 'player' || gamePhase !== 'aiming') return;
+
         const canvas = canvasRef.current;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
@@ -295,8 +442,7 @@ const PoolTable: React.FC = () => {
             const cy = cueBall.y + RAIL_WIDTH;
             const dist = Math.hypot(x - cx, y - cy);
 
-            // Only allow dragging if ball is mostly stopped
-            if (dist < BALL_RADIUS * 2 && Math.abs(cueBall.vx) < STOP_VELOCITY && Math.abs(cueBall.vy) < STOP_VELOCITY) {
+            if (dist < BALL_RADIUS * 2) {
                 isDraggingRef.current = true;
                 mousePosRef.current = { x, y };
             }
@@ -317,6 +463,8 @@ const PoolTable: React.FC = () => {
         if (isDraggingRef.current) {
             isDraggingRef.current = false;
 
+            if (turn !== 'player' || gamePhase !== 'aiming') return;
+
             const cueBall = ballsRef.current.find(b => b.number === 0);
             if (cueBall) {
                 const cx = cueBall.x + RAIL_WIDTH;
@@ -328,22 +476,56 @@ const PoolTable: React.FC = () => {
                 // Apply velocity proportional to drag distance
                 cueBall.vx = dx * POWER_MULTIPLIER;
                 cueBall.vy = dy * POWER_MULTIPLIER;
+
+                setGamePhase('moving');
+                pottedBallsThisTurnRef.current = [];
+                scratchRef.current = false;
             }
         }
     };
 
     return (
-        <div className="flex justify-center items-center py-8">
-            <canvas
-                ref={canvasRef}
-                width={TABLE_WIDTH + RAIL_WIDTH * 2}
-                height={TABLE_HEIGHT + RAIL_WIDTH * 2}
-                className="cursor-crosshair shadow-lg"
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-            />
+        <div className="flex flex-col items-center">
+            {/* HUD */}
+            <div className="mb-4 p-4 bg-gray-800 rounded-xl shadow-lg border border-gray-700 min-w-[300px] text-center">
+                <div className="text-2xl font-bold mb-2 text-white">
+                    {message}
+                </div>
+                <div className={`text-sm font-semibold tracking-wider ${turn === 'player' ? 'text-green-400' : 'text-blue-400'
+                    }`}>
+                    {turn === 'player' ? "YOUR SHOT" : "AI THINKING..."}
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                    Phase: {gamePhase}
+                </div>
+                {playerGroup && (
+                    <div className={`mt-2 text-sm font-bold ${playerGroup === 'solids' ? 'text-yellow-500' : 'text-purple-500'}`}>
+                        YOU ARE {playerGroup.toUpperCase()}
+                    </div>
+                )}
+                {!playerGroup && (
+                    <div className="mt-2 text-sm text-gray-400">
+                        TABLE OPEN
+                    </div>
+                )}
+            </div>
+
+            <div className="flex justify-center items-center py-2 relative">
+                <canvas
+                    ref={canvasRef}
+                    width={TABLE_WIDTH + RAIL_WIDTH * 2}
+                    height={TABLE_HEIGHT + RAIL_WIDTH * 2}
+                    className={`shadow-2xl rounded-lg ${turn === 'player' && gamePhase === 'aiming' ? 'cursor-crosshair' : 'cursor-default'}`}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                />
+            </div>
+
+            <div className="mt-6 text-gray-400 text-sm max-w-md text-center">
+                {turn === 'player' ? "Click and drag from the cue ball (white) to aim and shoot." : "Wait for the AI to take its shot."}
+            </div>
         </div>
     );
 };
