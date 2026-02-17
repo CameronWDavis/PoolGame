@@ -8,9 +8,6 @@ function App() {
         <h1 className="title">
           Pool Game
         </h1>
-        <p className="subtitle">
-          Realistic Canvas Implementation
-        </p>
       </header>
 
       <main className="game-area">

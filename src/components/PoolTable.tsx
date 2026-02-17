@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import './PoolTable.css';
 import {
     TABLE_WIDTH, TABLE_HEIGHT, RAIL_WIDTH, POCKET_RADIUS, BALL_RADIUS,
     FELT_COLOR, RAIL_COLOR, POCKET_COLOR,
@@ -485,37 +486,43 @@ const PoolTable: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col items-center">
+        <div className="pool-container">
+            {/* Corner Group Indicator */}
+            {playerGroup && (
+                <div className="corner-indicator">
+                    <span className={`indicator-dot ${playerGroup === 'solids' ? 'dot-solids' : 'dot-stripes'}`}></span>
+                    {playerGroup === 'solids' ? "SOLIDS" : "STRIPES"}
+                </div>
+            )}
+
             {/* HUD */}
-            <div className="mb-4 p-4 bg-gray-800 rounded-xl shadow-lg border border-gray-700 min-w-[300px] text-center">
-                <div className="text-2xl font-bold mb-2 text-white">
+            <div className="pool-hud">
+                <div className="pool-message">
                     {message}
                 </div>
-                <div className={`text-sm font-semibold tracking-wider ${turn === 'player' ? 'text-green-400' : 'text-blue-400'
-                    }`}>
+                <div className={`pool-turn-indicator ${turn === 'player' ? 'turn-player' : 'turn-ai'}`}>
                     {turn === 'player' ? "YOUR SHOT" : "AI THINKING..."}
                 </div>
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="pool-phase">
                     Phase: {gamePhase}
                 </div>
-                {playerGroup && (
-                    <div className={`mt-2 text-sm font-bold ${playerGroup === 'solids' ? 'text-yellow-500' : 'text-purple-500'}`}>
+                {playerGroup ? (
+                    <div className={`pool-group-status ${playerGroup === 'solids' ? 'group-solids' : 'group-stripes'}`}>
                         YOU ARE {playerGroup.toUpperCase()}
                     </div>
-                )}
-                {!playerGroup && (
-                    <div className="mt-2 text-sm text-gray-400">
+                ) : (
+                    <div className="pool-group-status group-open">
                         TABLE OPEN
                     </div>
                 )}
             </div>
 
-            <div className="flex justify-center items-center py-2 relative">
+            <div className="canvas-wrapper">
                 <canvas
                     ref={canvasRef}
                     width={TABLE_WIDTH + RAIL_WIDTH * 2}
                     height={TABLE_HEIGHT + RAIL_WIDTH * 2}
-                    className={`shadow-2xl rounded-lg ${turn === 'player' && gamePhase === 'aiming' ? 'cursor-crosshair' : 'cursor-default'}`}
+                    className={`pool-canvas ${turn === 'player' && gamePhase === 'aiming' ? 'aiming' : 'waiting'}`}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
@@ -523,7 +530,7 @@ const PoolTable: React.FC = () => {
                 />
             </div>
 
-            <div className="mt-6 text-gray-400 text-sm max-w-md text-center">
+            <div className="helper-text">
                 {turn === 'player' ? "Click and drag from the cue ball (white) to aim and shoot." : "Wait for the AI to take its shot."}
             </div>
         </div>

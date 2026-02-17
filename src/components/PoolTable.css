@@ -1,0 +1,172 @@
+/* Main Container for Pool Table and HUD */
+.pool-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Premium HUD Styling */
+.pool-hud {
+    margin-bottom: 1.5rem;
+    padding: 1rem 2rem;
+    background: rgba(15, 23, 42, 0.85);
+    /* Slate 900 with opacity */
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    border-radius: 16px;
+    min-width: 320px;
+    text-align: center;
+    transition: all 0.3s ease;
+    color: #e2e8f0;
+}
+
+.pool-hud:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.5);
+}
+
+.pool-message {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.pool-turn-indicator {
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.turn-player {
+    color: #4ade80;
+    /* Green 400 */
+}
+
+.turn-ai {
+    color: #60a5fa;
+    /* Blue 400 */
+}
+
+.pool-phase {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    /* Slate 400 */
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.pool-group-status {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.group-solids {
+    color: #facc15;
+    /* Yellow 400 */
+    border: 1px solid rgba(250, 204, 21, 0.3);
+}
+
+.group-stripes {
+    color: #c084fc;
+    /* Purple 400 */
+    border: 1px solid rgba(192, 132, 252, 0.3);
+}
+
+.group-open {
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Canvas Container */
+.canvas-wrapper {
+    position: relative;
+    padding: 1rem;
+    border-radius: 12px;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
+}
+
+.pool-canvas {
+    border-radius: 8px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    transition: cursor 0.2s;
+}
+
+.pool-canvas.aiming {
+    cursor: crosshair;
+}
+
+.pool-canvas.waiting {
+    cursor: not-allowed;
+}
+
+/* Helper Text */
+.helper-text {
+    margin-top: 1.5rem;
+    color: #64748b;
+    font-size: 0.875rem;
+    max-width: 400px;
+    text-align: center;
+    line-height: 1.6;
+}
+
+/* Corner Indicator */
+.corner-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 1rem;
+    /* Adjust based on exact positioning needs */
+    padding: 0.5rem 1rem;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    font-weight: bold;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.indicator-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.dot-solids {
+    background: #facc15;
+    box-shadow: 0 0 8px rgba(250, 204, 21, 0.6);
+}
+
+.dot-stripes {
+    background: #c084fc;
+    /* Purple */
+    background: repeating-linear-gradient(45deg,
+            #c084fc,
+            #c084fc 2px,
+            #fff 2px,
+            #fff 4px);
+    box-shadow: 0 0 8px rgba(192, 132, 252, 0.6);
+}
